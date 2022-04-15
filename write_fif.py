@@ -1,12 +1,8 @@
-# %%
-
 import numpy as np
 import mne
 import os
 
 from pathlib import Path
-
-# %%
 
 base_path = Path("/storage/store/data/biomag_challenge/Biomag2022")
 
@@ -19,7 +15,6 @@ os.mkdir(target_path / "training" / "dementia")
 os.mkdir(target_path / "training" / "mci")
 os.mkdir(target_path / "test")
 
-# %%
 
 def create_raw(raw_data):
     raw_copy = raw_data.pick_types(meg=True)
@@ -38,8 +33,9 @@ def create_raw(raw_data):
 
 for subdir, dirs, files in os.walk(str(converted_path)):
     for file in files:
-        if file.find(".mat"):
-            raw_data = mne.io.read_raw_fieldtrip(subdir / file, None)
+        if file.endswith(".mat"):
+            raw_data = mne.io.read_raw_fieldtrip(Path(subdir) / file, None)
             raw_meg = create_raw(raw_data)
             new_path = subdir.replace("biomag_hokuto_fieldtrip", "biomag_hokuto_fif")
+            new_path = new_path + '/' + file
             raw_meg.save(new_path.replace(".mat", ".fif"))
