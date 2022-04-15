@@ -26,7 +26,8 @@ def run_subject(subject, feature_type):
         session="rest",
         processing="clean",
         suffix="epo",
-        extension=".fif"
+        extension=".fif",
+        check=False
     )
     epochs = mne.read_epochs(bids_path)
     
@@ -42,7 +43,8 @@ if __name__ == "__main__":
     features = []
     feature_type = "random"
     for subject in participants.participant_id:
+        subject = subject[4:]
         features.append(run_subject(subject, feature_type)[None, :])
     features = np.concatenate(features, axis=0)
-    np.save(DERIV_ROOT / f"features_{feature_type}.npy")
+    np.save(DERIV_ROOT / f"features_{feature_type}.npy", features)
     
