@@ -2,20 +2,27 @@ import numpy as np
 import pandas as pd
 
 import pathlib
+from sklearn.datasets import make_sparse_coded_signal
 
 from sklearn.pipeline import make_pipeline
-from sklearn.linear_model import RidgeCV
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import KFold, cross_validate
+from sklearn.metrics import accuracy_score
+
 import h5io
 import coffeine
+from copy import deepcopy
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
 BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
 
-BENCHMARKS = ['dummy', 'filterbank-riemann']
+# BENCHMARKS = ['dummy', 'filterbank-riemann']
+BENCHMARKS = ['filterbank-riemann']
+N_JOBS = 1
 
 frequency_bands = {
     "low": (0.1, 1),
@@ -28,32 +35,37 @@ frequency_bands = {
 }
 
 
-def get_labels(subjects):
-    labels = []
-    for subject in subjects:
-        subject = subject[4:]
-        if subject.find('control')==0:
-            labels.append('control')
-        if subject.find('mci')==0:
-            labels.append('mci')
-        if subject.find('dementia')==0:
-            labels.append('dementia')
-        if subject.find('test')==0:
-            labels.append('test')
-    return labels
+def get_subjects_labels(all_subjects):
+    train_subjects = []
+    # test_subjects = []
+    train_labels = []
+    for subject in all_subjects:
+        # subject = subject[4:]
+        if subject.find('control') == 4:
+            train_labels.append('control')
+            train_subjects.append(subject)
+        elif subject.find('mci') == 4:
+            train_labels.append('mci')
+            train_subjects.append(subject)
+        elif subject.find('dementia') == 4:
+            train_labels.append('dementia')
+            train_subjects.append(subject)
+        # elif subject.find('test') == 0:
+        #     test_subjects.append(subject)
+    return train_subjects, train_labels
 
 
 def load_data(benchmark):
     participants = pd.read_csv(BIDS_ROOT / "participants.tsv", sep="\t")
-    subjects = participants.participant_id
-    y = get_labels(subjects)
+    all_subjects = participants.participant_id
+    train_subjects, y = get_subjects_labels(all_subjects)
     if benchmark == 'dummy':
         X = np.zeros(shape=(len(y), 1))
         model = DummyClassifier(strategy='most_frequent')
     elif benchmark == 'filterbank-riemann':
         features = h5io.read_hdf5(
-            DERIV_ROOT / f'features_fb_covs.h5')
-        covs = [features[sub]['covs'] for sub in subjects]
+            DERIV_ROOT / 'features_fb_covs.h5')
+        covs = [features[sub]['covs'] for sub in train_subjects]
         covs = np.array(covs)
         X = pd.DataFrame(
             {band: list(covs[:, ii]) for ii, band in
@@ -65,7 +77,36 @@ def load_data(benchmark):
         )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            RidgeCV(alphas=np.logspace(-5, 10, 100)))
+            RandomForestClassifier(max_depth=5,
+                                   n_estimators=10,
+                                   max_features=1))
     return X, y, model
 
-# if __name__ == "__main__":
+
+def run_benchmark_cv(benchmark):
+    X, y, model = load_data(benchmark=benchmark)
+    cv = KFold(n_splits=3, shuffle=True, random_state=42)
+    scoring = accuracy_score
+
+    print("Running cross validation ...")
+    scores = cross_validate(
+        model, X, y, cv=cv, scoring=scoring,
+        n_jobs=N_JOBS)
+    print("... done.")
+
+    results = pd.DataFrame(
+        {'accuracy': scores['test_score'],
+         'fit_time': scores['fit_time'],
+         'score_time': scores['score_time'],
+         'benchmark': benchmark}
+    )
+    print(f'Accuracy of benchmark {benchmark} : ', results['accuracy'])
+    return results
+
+
+if __name__ == "__main__":
+    for benchmark in BENCHMARKS:
+        results_df = run_benchmark_cv(benchmark)
+        if results_df is not None:
+            results_df.to_csv(
+                f"./results/benchmark-{benchmark}.csv")
