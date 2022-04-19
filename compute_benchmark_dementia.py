@@ -8,7 +8,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import KFold, cross_validate
+from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.metrics import make_scorer, accuracy_score
 
 import h5io
@@ -19,8 +19,8 @@ BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
 
-# BENCHMARKS = ['dummy', 'filterbank-riemann']
-BENCHMARKS = ['filterbank-riemann']
+BENCHMARKS = ['dummy', 'filterbank-riemann']
+# BENCHMARKS = ['dummy']
 N_JOBS = 1
 
 frequency_bands = {
@@ -84,7 +84,7 @@ def load_data(benchmark):
 
 def run_benchmark_cv(benchmark):
     X, y, model = load_data(benchmark=benchmark)
-    cv = KFold(n_splits=3, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
     scoring = make_scorer(accuracy_score)
 
     print("Running cross validation ...")
