@@ -13,7 +13,6 @@ from sklearn.metrics import make_scorer, accuracy_score
 
 import h5io
 import coffeine
-from copy import deepcopy
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
 BIDS_ROOT = pathlib.Path(
