@@ -13,7 +13,7 @@ import h5io
 import coffeine
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
-FEATURES_ROOT = pathlib.Path('/storage/store2/work/bmalezie/biomag_challenge')
+FEATURES_ROOT = DERIV_ROOT
 BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
