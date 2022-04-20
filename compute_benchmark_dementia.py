@@ -96,7 +96,7 @@ def run_benchmark_cv(benchmark):
          'score_time': scores['score_time'],
          'benchmark': benchmark}
     )
-    print(f'Accuracy of benchmark {benchmark} : \n', results['accuracy'])
+    # print(f'Accuracy of benchmark {benchmark} : \n', results['accuracy'])
     return results
 
 
@@ -106,3 +106,6 @@ if __name__ == "__main__":
         if results_df is not None:
             results_df.to_csv(
                 f"./results/benchmark-{benchmark}.csv")
+            mean_accuracy = results_df['accuracy'].mean()
+            std_accuracy = results_df['accuracy'].std()
+            print(f'Mean accuracy of {benchmark} model: {mean_accuracy} +- {std_accuracy}')
