@@ -7,7 +7,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.model_selection import StratifiedShuffleSplit, cross_validate
 from sklearn.metrics import make_scorer, accuracy_score
 
 import h5io
@@ -75,15 +75,13 @@ def load_data(benchmark):
         )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            RandomForestClassifier(max_depth=5,
-                                   n_estimators=10,
-                                   max_features=1))
+            RandomForestClassifier(n_estimators=100))
     return X, y, model
 
 
 def run_benchmark_cv(benchmark):
     X, y, model = load_data(benchmark=benchmark)
-    cv = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
+    cv = StratifiedShuffleSplit(n_splits=10)
     scoring = make_scorer(accuracy_score)
 
     print("Running cross validation ...")
@@ -98,7 +96,7 @@ def run_benchmark_cv(benchmark):
          'score_time': scores['score_time'],
          'benchmark': benchmark}
     )
-    print(f'Accuracy of benchmark {benchmark} : ', results['accuracy'])
+    print(f'Accuracy of benchmark {benchmark} : \n', results['accuracy'])
     return results
 
 
