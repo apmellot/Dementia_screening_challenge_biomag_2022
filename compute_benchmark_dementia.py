@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-
 import pathlib
 
 from sklearn.pipeline import make_pipeline
@@ -14,11 +13,13 @@ import h5io
 import coffeine
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
+FEATURES_ROOT = pathlib.Path('/storage/store2/work/bmalezie/biomag_challenge')
 BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
 
-BENCHMARKS = ['dummy', 'filterbank-riemann']
+BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann']
+# BENCHMARKS = ['dummy', 'features_psd']
 # BENCHMARKS = ['dummy']
 N_JOBS = 5
 RANDOM_STATE = 42
@@ -58,12 +59,15 @@ def load_data(benchmark):
     participants = pd.read_csv(BIDS_ROOT / "participants.tsv", sep="\t")
     all_subjects = participants.participant_id
     train_subjects, y = get_subjects_labels(all_subjects)
+
+    # Dummy model
     if benchmark == 'dummy':
         X = np.zeros(shape=(len(y), 1))
         model = DummyClassifier(strategy='most_frequent')
+
+    # Riemann
     elif benchmark == 'filterbank-riemann':
-        features = h5io.read_hdf5(
-            DERIV_ROOT / 'features_fb_covs.h5')
+        features = h5io.read_hdf5(DERIV_ROOT / 'features_fb_covs.h5')
         covs = [features[sub]['covs'] for sub in train_subjects]
         covs = np.array(covs)
         X = pd.DataFrame(
@@ -76,13 +80,30 @@ def load_data(benchmark):
         )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE))
+            RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)
+        )
+
+    # Simple features from PSD
+    elif benchmark == 'features-psd':
+        features = h5io.read_hdf5(FEATURES_ROOT / 'features_features_psd.h5')
+        X = np.concatenate(
+            [features[sub][None, :] for sub in train_subjects],
+            axis=0
+        )
+        model = make_pipeline(
+            StandardScaler(),
+            RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)
+        )
     return X, y, model
 
 
 def run_benchmark_cv(benchmark):
     X, y, model = load_data(benchmark=benchmark)
-    cv = StratifiedShuffleSplit(n_splits=20, test_size=0.2, random_state=RANDOM_STATE)
+    cv = StratifiedShuffleSplit(
+        n_splits=20,
+        test_size=0.2,
+        random_state=RANDOM_STATE
+    )
     scoring = make_scorer(accuracy_score)
 
     print("Running cross validation ...")

@@ -1,6 +1,9 @@
 from joblib import Parallel, delayed
-import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
 
+import pandas as pd
+import numpy as np
 import pathlib
 
 import mne_bids
@@ -9,10 +12,12 @@ import coffeine
 import h5io
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
+FEATURES_ROOT = pathlib.Path('/storage/store2/work/bmalezie/biomag_challenge')
 BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
-FEATURE_TYPE = ['fb_covs']
+# FEATURE_TYPE = ['fb_covs']
+FEATURE_TYPE = ['features_psd']
 N_JOBS = 10
 
 frequency_bands = {
@@ -34,6 +39,53 @@ def extract_fb_covs(epochs, frequency_bands):
     return features
 
 
+def get_slope(x, y):
+    lm = LinearRegression()
+    lm.fit(x, y)
+    return lm.coef_
+
+
+def extract_simple_features(epochs):
+    psd, freqs = mne.time_frequency.psd_welch(epochs, fmax=49)
+    window = (freqs >= 0.1) & (freqs <= 120)
+    freqs = freqs[window]
+    psd = psd[..., window]
+    log_freq = np.log10(freqs[:, None])
+
+    # Slope low frequencies
+    low_freq = (freqs >= 0.1) & (freqs <= 1.5)
+    y_low = psd[..., low_freq]
+    x_low = np.log10(freqs[low_freq])[:, None]
+
+    X_1f_low = np.array(
+        [get_slope(x_low, yy.T)[:, 0]
+         for yy in y_low]
+    ).mean(0)
+
+    # Slope high frequencies
+    gamma_low = (freqs >= 35) & (freqs <= 49.8)
+    y_gamma_low = psd[..., gamma_low]
+    x_gamma_low = np.log10(freqs[gamma_low])[:, None]
+
+    X_1f_gamma = np.array(
+        [get_slope(x_gamma_low, yy.T)[:, 0]
+         for yy in y_gamma_low]
+    ).mean(0)
+
+    # Alpha peak
+    psd_fit = np.log10(psd).mean(axis=(0,1))
+    poly_freqs = PolynomialFeatures(degree=15).fit_transform(log_freq)
+    lm = LinearRegression()
+    lm.fit(poly_freqs, psd_fit)
+    resid = psd_fit - lm.predict(poly_freqs)
+    filt = ((freqs >= 6) & (freqs < 15))
+    idx = resid[filt].argmax(0)
+    peak = freqs[filt][idx]
+
+    out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
+    return out
+
+
 def run_subject(subject, feature_type):
     bids_path = mne_bids.BIDSPath(
         subject=subject,
@@ -49,6 +101,8 @@ def run_subject(subject, feature_type):
     epochs = mne.read_epochs(bids_path)
     if feature_type == 'fb_covs':
         out = extract_fb_covs(epochs, frequency_bands)
+    elif feature_type == 'features_psd':
+        out = extract_simple_features(epochs)
 
     return out
 
@@ -65,7 +119,7 @@ if __name__ == "__main__":
         )
         out = {sub: ff for sub, ff in zip(subjects, features)
                if not isinstance(ff, str)}
-        out_fname = DERIV_ROOT / f'features_{feature_type}.h5'
+        out_fname = FEATURES_ROOT / f'features_{feature_type}.h5'
         h5io.write_hdf5(
             out_fname,
             out,
