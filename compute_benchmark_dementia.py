@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 import pathlib
-from sklearn.datasets import make_sparse_coded_signal
 
 from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import RandomForestClassifier
