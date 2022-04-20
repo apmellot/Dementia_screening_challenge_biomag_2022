@@ -20,7 +20,7 @@ BIDS_ROOT = pathlib.Path(
 
 BENCHMARKS = ['dummy', 'filterbank-riemann']
 # BENCHMARKS = ['dummy']
-N_JOBS = 1
+N_JOBS = 5
 
 frequency_bands = {
     "low": (0.1, 1),
@@ -81,7 +81,7 @@ def load_data(benchmark):
 
 def run_benchmark_cv(benchmark):
     X, y, model = load_data(benchmark=benchmark)
-    cv = StratifiedShuffleSplit(n_splits=10)
+    cv = StratifiedShuffleSplit(n_splits=20, test_size=0.2, random_state=42)
     scoring = make_scorer(accuracy_score)
 
     print("Running cross validation ...")
