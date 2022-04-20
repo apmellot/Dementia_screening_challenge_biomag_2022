@@ -49,12 +49,12 @@ def run_subject(subject, feature_type):
     epochs = mne.read_epochs(bids_path)
     if feature_type == 'fb_covs':
         out = extract_fb_covs(epochs, frequency_bands)
-        
+
     return out
 
 
 if __name__ == "__main__":
-    
+
     participants = pd.read_csv(BIDS_ROOT / "participants.tsv", sep="\t")
     subjects = participants.participant_id
     features = []
