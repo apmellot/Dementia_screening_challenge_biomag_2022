@@ -73,7 +73,7 @@ def extract_simple_features(epochs):
     ).mean(0)
 
     # Alpha peak
-    psd_fit = np.log10(psd).mean(axis=(0,1))
+    psd_fit = np.log10(psd).mean(axis=(0, 1))
     poly_freqs = PolynomialFeatures(degree=15).fit_transform(log_freq)
     lm = LinearRegression()
     lm.fit(poly_freqs, psd_fit)
