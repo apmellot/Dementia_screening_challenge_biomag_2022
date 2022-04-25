@@ -11,16 +11,21 @@ from sklearn.metrics import make_scorer, accuracy_score
 
 import h5io
 import coffeine
+import dameeg
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
 FEATURES_ROOT = DERIV_ROOT
 BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
+ROOT = pathlib.Path(
+    '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto'
+)
 
-BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann']
+# BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
 # BENCHMARKS = ['dummy', 'features_psd']
 # BENCHMARKS = ['dummy']
+BENCHMARKS = ['dummy', 'filterbank-riemann-da']
 N_JOBS = 5
 RANDOM_STATE = 42
 
@@ -55,6 +60,20 @@ def get_subjects_labels(all_subjects):
     return train_subjects, train_labels
 
 
+def get_site(labels):
+    subjects_A = []
+    subjects_B = []
+    for label in labels:
+        site_info = pd.read_excel(ROOT / 'hokuto_profile.xlsx', sheet_name=label)
+        for i in range(site_info.shape[0]):
+            if site_info['Site'].iloc[i] == 'A':
+                subjects_A.append('sub-' + site_info['ID'].iloc[i][7:])
+            if site_info['Site'].iloc[i] == 'B':
+                subjects_B.append('sub-' + site_info['ID'].iloc[i][7:])
+    return subjects_A, subjects_B
+
+
+
 def load_data(benchmark):
     participants = pd.read_csv(BIDS_ROOT / "participants.tsv", sep="\t")
     all_subjects = participants.participant_id
@@ -81,6 +100,57 @@ def load_data(benchmark):
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
             RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)
+        )
+
+    # Riemann + domain adaptation
+    elif benchmark == 'filterbank-riemann-da':
+        rank = 65
+        features = h5io.read_hdf5(DERIV_ROOT / 'features_fb_covs.h5')
+        subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'])
+        _, y = get_subjects_labels(subjects_A + subjects_B)
+        covs_A = [features[sub]['covs'] for sub in subjects_A]
+        covs_A = np.array(covs_A)
+        covs_B = [features[sub]['covs'] for sub in subjects_B]
+        covs_B = np.array(covs_B)
+        X_A = pd.DataFrame(
+            {band: list(covs_A[:, ii]) for ii, band in
+                enumerate(frequency_bands)})
+        X_B = pd.DataFrame(
+            {band: list(covs_B[:, ii]) for ii, band in
+                enumerate(frequency_bands)})
+        X_At = pd.DataFrame()
+        X_Bt = pd.DataFrame()
+        for band in frequency_bands:
+            spatial_filter = coffeine.ProjCommonSpace(n_compo=rank)
+            spatial_filter.fit(X_A[band])
+            X_A_filtered = spatial_filter.transform(X_A[band])
+            X_A_filtered = np.array([X_A_filtered.iloc[i][0] for i in range(X_A_filtered.shape[0])])
+            spatial_filter.fit(X_B[band])
+            X_B_filtered = spatial_filter.transform(X_B[band])
+            X_B_filtered = np.array([X_B_filtered.iloc[i][0] for i in range(X_B_filtered.shape[0])])
+            X_A_aligned, X_B_aligned = dameeg.align_procrustes(X_A_filtered, X_B_filtered)
+            # X_A_aligned, X_B_aligned = dameeg.recenter.align_recenter(X_A_filtered, X_B_filtered)
+            X_A_aligned = pd.DataFrame({'cov': list(X_A_aligned)})
+            X_B_aligned = pd.DataFrame({'cov': list(X_B_aligned)})
+            covariance_transformer = coffeine.Riemann(metric='riemann')
+            covariance_transformer.fit(X_A_aligned)
+            X_A_vect = covariance_transformer.transform(X_A_aligned)
+            covariance_transformer = coffeine.Riemann(metric='riemann')
+            covariance_transformer.fit(X_B_aligned)
+            X_B_vect = covariance_transformer.transform(X_B_aligned)
+            if X_At.empty:
+                X_At = X_A_vect
+                X_Bt = X_B_vect
+            else:
+                X_At = pd.concat([X_At, X_A_vect], axis=1)
+                X_Bt = pd.concat([X_Bt, X_B_vect], axis=1)
+
+        X = pd.concat([X_At, X_Bt], axis=0)
+            
+        model = make_pipeline(
+            StandardScaler(),
+            RandomForestClassifier(n_estimators=100,
+                                   random_state=RANDOM_STATE)
         )
 
     # Simple features from PSD
