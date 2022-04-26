@@ -82,7 +82,15 @@ def extract_simple_features(epochs):
     idx = resid[filt].argmax(0)
     peak = freqs[filt][idx]
 
-    out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
+    # Median power
+    psd_sum = psd_fit.cumsum()
+    idx = np.abs(psd_sum[-1] / 2 - psd_sum).argmin()
+    freq_median = freqs[idx]
+
+    # Spectral entropy
+    entropy = np.sum(- psd.mean(axis=(0, 1)) * psd_fit)
+
+    out = np.concatenate([X_1f_low, X_1f_gamma, peak, freq_median, entropy], axis=None)
     return out
 
 

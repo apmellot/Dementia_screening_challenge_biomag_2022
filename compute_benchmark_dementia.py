@@ -18,8 +18,8 @@ BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
 
-BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann']
-# BENCHMARKS = ['dummy', 'features_psd']
+# BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann']
+BENCHMARKS = ['dummy', 'features-psd']
 # BENCHMARKS = ['dummy']
 N_JOBS = 5
 RANDOM_STATE = 42
