@@ -22,10 +22,10 @@ ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto'
 )
 
-# BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
+BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
 # BENCHMARKS = ['dummy', 'features_psd']
 # BENCHMARKS = ['dummy']
-BENCHMARKS = ['dummy', 'filterbank-riemann-da']
+# BENCHMARKS = ['dummy', 'filterbank-riemann', 'filterbank-riemann-da']
 N_JOBS = 5
 RANDOM_STATE = 42
 
@@ -104,53 +104,37 @@ def load_data(benchmark):
 
     # Riemann + domain adaptation
     elif benchmark == 'filterbank-riemann-da':
-        rank = 65
+        reg = 1e-30
         features = h5io.read_hdf5(DERIV_ROOT / 'features_fb_covs.h5')
         subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'])
         _, y = get_subjects_labels(subjects_A + subjects_B)
-        covs_A = [features[sub]['covs'] for sub in subjects_A]
+        covs_A = [features[sub]['covs'] + reg*np.eye(features[sub]['covs'].shape[1])
+                  for sub in subjects_A]
         covs_A = np.array(covs_A)
-        covs_B = [features[sub]['covs'] for sub in subjects_B]
+        covs_B = [features[sub]['covs'] + reg*np.eye(features[sub]['covs'].shape[1])
+                  for sub in subjects_B]
         covs_B = np.array(covs_B)
+        covs_A_aligned = np.zeros(covs_A.shape)
+        covs_B_aligned = np.zeros(covs_B.shape)
+        for i in range(len(frequency_bands.keys())):
+            (covs_A_aligned[:, i],
+             covs_B_aligned[:, i]) = dameeg.recenter_rescale.align_recenter_rescale(covs_A[:, i],
+                                                                                    covs_B[:, i])
         X_A = pd.DataFrame(
-            {band: list(covs_A[:, ii]) for ii, band in
+            {band: list(covs_A_aligned[:, ii]) for ii, band in
                 enumerate(frequency_bands)})
         X_B = pd.DataFrame(
-            {band: list(covs_B[:, ii]) for ii, band in
+            {band: list(covs_B_aligned[:, ii]) for ii, band in
                 enumerate(frequency_bands)})
-        X_At = pd.DataFrame()
-        X_Bt = pd.DataFrame()
-        for band in frequency_bands:
-            spatial_filter = coffeine.ProjCommonSpace(n_compo=rank)
-            spatial_filter.fit(X_A[band])
-            X_A_filtered = spatial_filter.transform(X_A[band])
-            X_A_filtered = np.array([X_A_filtered.iloc[i][0] for i in range(X_A_filtered.shape[0])])
-            spatial_filter.fit(X_B[band])
-            X_B_filtered = spatial_filter.transform(X_B[band])
-            X_B_filtered = np.array([X_B_filtered.iloc[i][0] for i in range(X_B_filtered.shape[0])])
-            X_A_aligned, X_B_aligned = dameeg.align_procrustes(X_A_filtered, X_B_filtered)
-            # X_A_aligned, X_B_aligned = dameeg.recenter.align_recenter(X_A_filtered, X_B_filtered)
-            X_A_aligned = pd.DataFrame({'cov': list(X_A_aligned)})
-            X_B_aligned = pd.DataFrame({'cov': list(X_B_aligned)})
-            covariance_transformer = coffeine.Riemann(metric='riemann')
-            covariance_transformer.fit(X_A_aligned)
-            X_A_vect = covariance_transformer.transform(X_A_aligned)
-            covariance_transformer = coffeine.Riemann(metric='riemann')
-            covariance_transformer.fit(X_B_aligned)
-            X_B_vect = covariance_transformer.transform(X_B_aligned)
-            if X_At.empty:
-                X_At = X_A_vect
-                X_Bt = X_B_vect
-            else:
-                X_At = pd.concat([X_At, X_A_vect], axis=1)
-                X_Bt = pd.concat([X_Bt, X_B_vect], axis=1)
-
-        X = pd.concat([X_At, X_Bt], axis=0)
-            
+        X = pd.concat([X_A, X_B], axis=0)
+        filter_bank_transformer = coffeine.make_filter_bank_transformer(
+            names=list(frequency_bands),
+            method='riemann',
+            projection_params=dict(scale='auto', n_compo=65)  # n_compo value
+        )
         model = make_pipeline(
-            StandardScaler(),
-            RandomForestClassifier(n_estimators=100,
-                                   random_state=RANDOM_STATE)
+            filter_bank_transformer, StandardScaler(),
+            RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)
         )
 
     # Simple features from PSD
