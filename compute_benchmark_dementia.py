@@ -11,7 +11,8 @@ from sklearn.metrics import make_scorer, accuracy_score
 
 import h5io
 import coffeine
-import dameeg
+from utils.domain_adaptation import align_recenter_rescale
+from utils.spatial_filters import ProjCommonSpace
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
 FEATURES_ROOT = DERIV_ROOT
@@ -25,7 +26,7 @@ ROOT = pathlib.Path(
 BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
 # BENCHMARKS = ['dummy', 'features_psd']
 # BENCHMARKS = ['dummy']
-# BENCHMARKS = ['dummy', 'filterbank-riemann', 'filterbank-riemann-da']
+# BENCHMARKS = ['filterbank-riemann', 'filterbank-riemann-da']
 N_JOBS = 5
 RANDOM_STATE = 42
 
@@ -78,6 +79,8 @@ def load_data(benchmark):
     participants = pd.read_csv(BIDS_ROOT / "participants.tsv", sep="\t")
     all_subjects = participants.participant_id
     train_subjects, y = get_subjects_labels(all_subjects)
+    rank = 100
+    reg = 1e-35
 
     # Dummy model
     if benchmark == 'dummy':
@@ -95,31 +98,38 @@ def load_data(benchmark):
         filter_bank_transformer = coffeine.make_filter_bank_transformer(
             names=list(frequency_bands),
             method='riemann',
-            projection_params=dict(scale='auto', n_compo=65)  # n_compo value
+            projection_params=dict(scale='auto', n_compo=rank, reg=reg)  # n_compo value
         )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)
+            RandomForestClassifier(n_estimators=rank, random_state=RANDOM_STATE)
         )
 
     # Riemann + domain adaptation
     elif benchmark == 'filterbank-riemann-da':
-        reg = 1e-30
         features = h5io.read_hdf5(DERIV_ROOT / 'features_fb_covs.h5')
         subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'])
         _, y = get_subjects_labels(subjects_A + subjects_B)
-        covs_A = [features[sub]['covs'] + reg*np.eye(features[sub]['covs'].shape[1])
+        covs_A = [features[sub]['covs']
                   for sub in subjects_A]
         covs_A = np.array(covs_A)
-        covs_B = [features[sub]['covs'] + reg*np.eye(features[sub]['covs'].shape[1])
+        covs_B = [features[sub]['covs']
                   for sub in subjects_B]
         covs_B = np.array(covs_B)
-        covs_A_aligned = np.zeros(covs_A.shape)
-        covs_B_aligned = np.zeros(covs_B.shape)
+        covs_A_aligned = np.zeros((covs_A.shape[0],
+                                   len(frequency_bands.keys()),
+                                   rank, rank))
+        covs_B_aligned = np.zeros((covs_B.shape[0],
+                                   len(frequency_bands.keys()),
+                                   rank, rank))
         for i in range(len(frequency_bands.keys())):
+            proj = ProjCommonSpace(n_compo=rank, reg=reg)
+            all_covs = np.concatenate((covs_A[:, i], covs_B[:, i]))
+            all_covs = proj.fit_transform(all_covs)
+            covs_A_pca = all_covs[:covs_A.shape[0]]
+            covs_B_pca = all_covs[covs_A.shape[0]:]
             (covs_A_aligned[:, i],
-             covs_B_aligned[:, i]) = dameeg.recenter_rescale.align_recenter_rescale(covs_A[:, i],
-                                                                                    covs_B[:, i])
+             covs_B_aligned[:, i]) = align_recenter_rescale(covs_A_pca, covs_B_pca)
         X_A = pd.DataFrame(
             {band: list(covs_A_aligned[:, ii]) for ii, band in
                 enumerate(frequency_bands)})
@@ -130,7 +140,7 @@ def load_data(benchmark):
         filter_bank_transformer = coffeine.make_filter_bank_transformer(
             names=list(frequency_bands),
             method='riemann',
-            projection_params=dict(scale='auto', n_compo=65)  # n_compo value
+            projection_params=dict(scale='auto', n_compo=rank, reg=reg)
         )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
@@ -172,7 +182,6 @@ def run_benchmark_cv(benchmark):
          'score_time': scores['score_time'],
          'benchmark': benchmark}
     )
-    # print(f'Accuracy of benchmark {benchmark} : \n', results['accuracy'])
     return results
 
 
