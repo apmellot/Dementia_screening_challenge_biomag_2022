@@ -6,13 +6,15 @@ from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import StratifiedShuffleSplit, cross_validate
-from sklearn.metrics import make_scorer, accuracy_score
+from sklearn.model_selection import StratifiedShuffleSplit, cross_val_predict, cross_validate
+from sklearn.metrics import make_scorer, confusion_matrix
 
 import h5io
 import coffeine
 from utils.domain_adaptation import align_recenter_rescale
 from utils.spatial_filters import ProjCommonSpace
+
+import matplotlib.pyplot as plt
 
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
 FEATURES_ROOT = DERIV_ROOT
@@ -24,7 +26,7 @@ ROOT = pathlib.Path(
 )
 
 BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
-# BENCHMARKS = ['dummy', 'features_psd']
+# BENCHMARKS = ['dummy', 'features-psd']
 # BENCHMARKS = ['dummy']
 # BENCHMARKS = ['filterbank-riemann', 'filterbank-riemann-da']
 N_JOBS = 5
@@ -61,23 +63,33 @@ def get_subjects_labels(all_subjects):
     return train_subjects, train_labels
 
 
-def get_site(labels):
+def get_site(labels, subjects):
     subjects_A = []
     subjects_B = []
     for label in labels:
         site_info = pd.read_excel(ROOT / 'hokuto_profile.xlsx', sheet_name=label)
         for i in range(site_info.shape[0]):
-            if site_info['Site'].iloc[i] == 'A':
-                subjects_A.append('sub-' + site_info['ID'].iloc[i][7:])
-            if site_info['Site'].iloc[i] == 'B':
-                subjects_B.append('sub-' + site_info['ID'].iloc[i][7:])
+            subject = 'sub-' + site_info['ID'].iloc[i][7:]
+            if site_info['Site'].iloc[i] == 'A' and subject in subjects:
+                subjects_A.append(subject)
+            if site_info['Site'].iloc[i] == 'B' and subject in subjects:
+                subjects_B.append(subject)
     return subjects_A, subjects_B
 
 
+def get_subjects_age(age, labels):
+    subjects = []
+    for label in labels:
+        site_info = pd.read_excel(ROOT / 'hokuto_profile.xlsx', sheet_name=label)
+        for i in range(site_info.shape[0]):
+            if site_info['Age'].iloc[i]>= age:
+                subjects.append('sub-' + site_info['ID'].iloc[i][7:])
+    print(len(subjects))
+    return subjects
+
 
 def load_data(benchmark):
-    participants = pd.read_csv(BIDS_ROOT / "participants.tsv", sep="\t")
-    all_subjects = participants.participant_id
+    all_subjects = get_subjects_age(50, ['control', 'dementia', 'mci'])
     train_subjects, y = get_subjects_labels(all_subjects)
     rank = 100
     reg = 1e-35
@@ -108,7 +120,7 @@ def load_data(benchmark):
     # Riemann + domain adaptation
     elif benchmark == 'filterbank-riemann-da':
         features = h5io.read_hdf5(DERIV_ROOT / 'features_fb_covs.h5')
-        subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'])
+        subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'], all_subjects)
         _, y = get_subjects_labels(subjects_A + subjects_B)
         covs_A = [features[sub]['covs']
                   for sub in subjects_A]
@@ -168,29 +180,60 @@ def run_benchmark_cv(benchmark):
         test_size=0.2,
         random_state=RANDOM_STATE
     )
-    scoring = make_scorer(accuracy_score)
+    
+    # y_true, y_pred = cross_val_predict(estimator=model, cv=cv, X=X, y=y)
+    # conf_matrix = confusion_matrix(y_true, y_pred)
+    conf_mats = []
+    for train_index, test_index in cv.split(X, y):
+        if benchmark == 'dummy' or benchmark =='features-psd':
+            X_train = X[train_index]
+            X_test = X[test_index]
+        else:
+            X_train = X.iloc[train_index]
+            X_test = X.iloc[test_index]
+        y_train = [y[i] for i in train_index]
+        y_test = [y[i] for i in test_index]
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        conf_mat = confusion_matrix(y_test, y_pred)
+        conf_mats.append(conf_mat[None, :])
+    conf_mat_mean = np.concatenate(conf_mats, axis=0).sum(axis=0)
 
-    print("Running cross validation ...")
-    scores = cross_validate(
-        model, X, y, cv=cv, scoring=scoring,
-        n_jobs=N_JOBS)
-    print("... done.")
+    # scoring = make_scorer(confusion_matrix)
 
-    results = pd.DataFrame(
-        {'accuracy': scores['test_score'],
-         'fit_time': scores['fit_time'],
-         'score_time': scores['score_time'],
-         'benchmark': benchmark}
-    )
-    return results
+    # print("Running cross validation ...")
+    # scores = cross_validate(
+    #     model, X, y, cv=cv, scoring=scoring,
+    #     n_jobs=N_JOBS)
+    # print("... done.")
+
+    # results = pd.DataFrame(
+    #     {'true-negative': scores['test_tn'],
+    #      'fit_time': scores['fit_time'],
+    #      'score_time': scores['score_time'],
+    #      'benchmark': benchmark}
+    # )
+    # results = pd.DataFrame(
+    #     {
+    #         'y_true'
+    #     }
+    return conf_mat_mean
 
 
 if __name__ == "__main__":
-    for benchmark in BENCHMARKS:
+    fig, axes = plt.subplots(1, len(BENCHMARKS))
+    for b, benchmark in enumerate(BENCHMARKS):
         results_df = run_benchmark_cv(benchmark)
-        if results_df is not None:
-            results_df.to_csv(
-                f"./results/benchmark-{benchmark}.csv")
-            mean_accuracy = results_df['accuracy'].mean()
-            std_accuracy = results_df['accuracy'].std()
-            print(f'Mean accuracy of {benchmark} model: {mean_accuracy} +- {std_accuracy}')
+        results_df = results_df/results_df.sum(axis=1, keepdims=True)
+        # if results_df is not None:
+        #     results_df.to_csv(
+        #         f"./results/benchmark-{benchmark}.csv")
+        #     mean_accuracy = results_df['accuracy'].mean()
+        #     std_accuracy = results_df['accuracy'].std()
+        #     print(f'Mean accuracy of {benchmark} model: {mean_accuracy} +- {std_accuracy}')
+        axes[b].matshow(results_df)
+        for (i, j), z in np.ndenumerate(results_df):
+            axes[b].text(j, i, '{:0.2f}'.format(z), ha='center', va='center',
+                    bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
+        
+plt.show()
