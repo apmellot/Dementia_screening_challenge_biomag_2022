@@ -4,10 +4,11 @@ import pathlib
 
 from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import StratifiedShuffleSplit, cross_val_predict, cross_validate
-from sklearn.metrics import make_scorer, confusion_matrix
+from sklearn.model_selection import StratifiedShuffleSplit, cross_validate
+from sklearn.metrics import balanced_accuracy_score, make_scorer, confusion_matrix, accuracy_score
 
 import h5io
 import coffeine
@@ -26,10 +27,7 @@ ROOT = pathlib.Path(
 )
 
 BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
-# BENCHMARKS = ['dummy', 'features-psd']
-# BENCHMARKS = ['dummy']
-# BENCHMARKS = ['filterbank-riemann', 'filterbank-riemann-da']
-N_JOBS = 5
+N_JOBS = 3
 RANDOM_STATE = 42
 
 frequency_bands = {
@@ -45,10 +43,8 @@ frequency_bands = {
 
 def get_subjects_labels(all_subjects):
     train_subjects = []
-    # test_subjects = []
     train_labels = []
     for subject in all_subjects:
-        # subject = subject[4:]
         if subject.find('control') == 4:
             train_labels.append('control')
             train_subjects.append(subject)
@@ -58,8 +54,6 @@ def get_subjects_labels(all_subjects):
         elif subject.find('dementia') == 4:
             train_labels.append('dementia')
             train_subjects.append(subject)
-        # elif subject.find('test') == 0:
-        #     test_subjects.append(subject)
     return train_subjects, train_labels
 
 
@@ -91,7 +85,7 @@ def get_subjects_age(age, labels):
 def load_data(benchmark):
     all_subjects = get_subjects_age(50, ['control', 'dementia', 'mci'])
     train_subjects, y = get_subjects_labels(all_subjects)
-    rank = 100
+    rank = 60
     reg = 1e-35
 
     # Dummy model
@@ -110,11 +104,15 @@ def load_data(benchmark):
         filter_bank_transformer = coffeine.make_filter_bank_transformer(
             names=list(frequency_bands),
             method='riemann',
-            projection_params=dict(scale='auto', n_compo=rank, reg=reg)  # n_compo value
+            projection_params=dict(scale='auto', n_compo=rank, reg=reg)
         )
+        # model = make_pipeline(
+        #     filter_bank_transformer, StandardScaler(),
+        #     RandomForestClassifier(n_estimators=40, random_state=RANDOM_STATE)
+        # )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            RandomForestClassifier(n_estimators=rank, random_state=RANDOM_STATE)
+            KNeighborsClassifier(3)
         )
 
     # Riemann + domain adaptation
@@ -154,9 +152,13 @@ def load_data(benchmark):
             method='riemann',
             projection_params=dict(scale='auto', n_compo=rank, reg=reg)
         )
+        # model = make_pipeline(
+        #     filter_bank_transformer, StandardScaler(),
+        #     RandomForestClassifier(n_estimators=40, random_state=RANDOM_STATE)
+        # )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)
+            KNeighborsClassifier(3)
         )
 
     # Simple features from PSD
@@ -168,8 +170,13 @@ def load_data(benchmark):
         )
         model = make_pipeline(
             StandardScaler(),
-            RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE)
+            RandomForestClassifier(n_estimators=40, random_state=RANDOM_STATE)
         )
+        # model = make_pipeline(
+        #     StandardScaler(),
+        #     KNeighborsClassifier(3)
+        # )
+
     return X, y, model
 
 
@@ -180,60 +187,56 @@ def run_benchmark_cv(benchmark):
         test_size=0.2,
         random_state=RANDOM_STATE
     )
-    
-    # y_true, y_pred = cross_val_predict(estimator=model, cv=cv, X=X, y=y)
-    # conf_matrix = confusion_matrix(y_true, y_pred)
-    conf_mats = []
-    for train_index, test_index in cv.split(X, y):
-        if benchmark == 'dummy' or benchmark =='features-psd':
-            X_train = X[train_index]
-            X_test = X[test_index]
-        else:
-            X_train = X.iloc[train_index]
-            X_test = X.iloc[test_index]
-        y_train = [y[i] for i in train_index]
-        y_test = [y[i] for i in test_index]
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        conf_mat = confusion_matrix(y_test, y_pred)
-        conf_mats.append(conf_mat[None, :])
-    conf_mat_mean = np.concatenate(conf_mats, axis=0).sum(axis=0)
 
-    # scoring = make_scorer(confusion_matrix)
+    # conf_mats = []
+    # for train_index, test_index in cv.split(X, y):
+    #     if benchmark == 'dummy' or benchmark =='features-psd':
+    #         X_train = X[train_index]
+    #         X_test = X[test_index]
+    #     else:
+    #         X_train = X.iloc[train_index]
+    #         X_test = X.iloc[test_index]
+    #     y_train = [y[i] for i in train_index]
+    #     y_test = [y[i] for i in test_index]
+    #     model.fit(X_train, y_train)
+    #     y_pred = model.predict(X_test)
+    #     conf_mat = confusion_matrix(y_test, y_pred)
+    #     conf_mats.append(conf_mat[None, :])
+    # conf_mat_mean = np.concatenate(conf_mats, axis=0).sum(axis=0)
 
-    # print("Running cross validation ...")
-    # scores = cross_validate(
-    #     model, X, y, cv=cv, scoring=scoring,
-    #     n_jobs=N_JOBS)
-    # print("... done.")
+    scoring = make_scorer(balanced_accuracy_score)
+    # scoring = make_scorer(accuracy_score)
 
-    # results = pd.DataFrame(
-    #     {'true-negative': scores['test_tn'],
-    #      'fit_time': scores['fit_time'],
-    #      'score_time': scores['score_time'],
-    #      'benchmark': benchmark}
-    # )
-    # results = pd.DataFrame(
-    #     {
-    #         'y_true'
-    #     }
-    return conf_mat_mean
+    print("Running cross validation ...")
+    scores = cross_validate(
+        model, X, y, cv=cv, scoring=scoring,
+        n_jobs=N_JOBS)
+    print("... done.")
+
+    results = pd.DataFrame(
+        {'accuracy': scores['test_score'],
+         'fit_time': scores['fit_time'],
+         'score_time': scores['score_time'],
+         'benchmark': benchmark}
+    )
+
+    return results
 
 
 if __name__ == "__main__":
-    fig, axes = plt.subplots(1, len(BENCHMARKS))
+    # fig, axes = plt.subplots(1, len(BENCHMARKS))
     for b, benchmark in enumerate(BENCHMARKS):
         results_df = run_benchmark_cv(benchmark)
-        results_df = results_df/results_df.sum(axis=1, keepdims=True)
-        # if results_df is not None:
-        #     results_df.to_csv(
-        #         f"./results/benchmark-{benchmark}.csv")
-        #     mean_accuracy = results_df['accuracy'].mean()
-        #     std_accuracy = results_df['accuracy'].std()
-        #     print(f'Mean accuracy of {benchmark} model: {mean_accuracy} +- {std_accuracy}')
-        axes[b].matshow(results_df)
-        for (i, j), z in np.ndenumerate(results_df):
-            axes[b].text(j, i, '{:0.2f}'.format(z), ha='center', va='center',
-                    bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
+        # results_df = results_df/results_df.sum(axis=1, keepdims=True)
+        if results_df is not None:
+            results_df.to_csv(
+                f"./results/benchmark-{benchmark}.csv")
+            mean_accuracy = results_df['accuracy'].mean()
+            std_accuracy = results_df['accuracy'].std()
+            print(f'Mean accuracy of {benchmark} model: {mean_accuracy} +- {std_accuracy}')
+#         axes[b].matshow(results_df)
+#         for (i, j), z in np.ndenumerate(results_df):
+#             axes[b].text(j, i, '{:0.2f}'.format(z), ha='center', va='center',
+#                     bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
         
-plt.show()
+# plt.show()
