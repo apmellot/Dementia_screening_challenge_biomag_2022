@@ -1,19 +1,35 @@
 import numpy as np
 import pandas as pd
+import pathlib
 import os.path as op
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-derivative_path = '/home/amellot/Documents/these/biomag_competition/derivatives'
-results_all = pd.read_csv(op.join(derivative_path, 'average_psd.csv'), index_col=0)
+results_all = pd.read_csv('./average_psd.csv', index_col=0)
+ROOT = pathlib.Path(
+    '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto'
+)
+
+def get_subjects_age(age, labels):
+    subjects = []
+    for label in labels:
+        site_info = pd.read_excel(ROOT / 'hokuto_profile.xlsx', sheet_name=label)
+        for i in range(site_info.shape[0]):
+            if site_info['Age'].iloc[i]>= age:
+                subjects.append(site_info['ID'].iloc[i][7:])
+    print(len(subjects))
+    return subjects
+
 
 psds_control = []
 psds_dementia = []
 psds_mci = []
 labels = results_all['label'].unique()
+subjects_all = get_subjects_age(50, ['control', 'dementia', 'mci'])
+# results_all = results_all[results_all['subject'].isin(subjects)]
 for label in labels:
     results = results_all.query(f"label == '{label}'")
-    subjects = results['subject'].unique()
+    subjects = [sub for sub in results['subject'] if sub in subjects_all]
     for subject in subjects:
         results_sub = results.query(f"subject == '{subject}'")
         if label == 'control':

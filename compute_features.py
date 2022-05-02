@@ -81,8 +81,29 @@ def extract_simple_features(epochs):
     filt = ((freqs >= 6) & (freqs < 15))
     idx = resid[filt].argmax(0)
     peak = freqs[filt][idx]
+    # psd_fit = np.log10(psd).mean(axis=(0))
+    # print(psd_fit.shape)
+    # poly_freqs = PolynomialFeatures(degree=15).fit_transform(log_freq)
+    # peaks = np.zeros(psd_fit.shape[1])
+    # for i in range(psd_fit.shape[1]):
+    #     lm = LinearRegression()
+    #     lm.fit(poly_freqs, psd_fit[:, i])
+    #     resid = psd_fit[:, i] - lm.predict(poly_freqs)
+    #     filt = ((freqs >= 6) & (freqs < 15))
+    #     idx = resid[filt].argmax(0)
+    #     peaks[i] = freqs[filt][idx]
 
-    out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
+    # Median power
+    psd_sum = psd_fit.cumsum()
+    idx = np.abs(psd_sum[-1] / 2 - psd_sum).argmin()
+    freq_median = freqs[idx]
+
+    # # Spectral entropy
+    # entropy = np.sum(- psd.mean(axis=(0, 1)) * psd_fit)
+
+    out = np.concatenate([X_1f_low, X_1f_gamma, peak, freq_median], axis=None)
+    # out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
+    print(out.shape)
     return out
 
 
