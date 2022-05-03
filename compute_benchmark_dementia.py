@@ -3,6 +3,7 @@ import pandas as pd
 import pathlib
 
 from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.dummy import DummyClassifier
@@ -27,7 +28,8 @@ ROOT = pathlib.Path(
 )
 
 BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
-N_JOBS = 3
+# BENCHMARKS = ['filterbank-riemann-da']
+N_JOBS = 2
 RANDOM_STATE = 42
 
 frequency_bands = {
@@ -84,8 +86,9 @@ def get_subjects_age(age, labels):
 
 def load_data(benchmark):
     all_subjects = get_subjects_age(50, ['control', 'dementia', 'mci'])
-    train_subjects, y = get_subjects_labels(all_subjects)
-    rank = 60
+    subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'], all_subjects)
+    train_subjects, y = get_subjects_labels(subjects_A + subjects_B)
+    rank = 50
     reg = 1e-35
 
     # Dummy model
@@ -106,19 +109,14 @@ def load_data(benchmark):
             method='riemann',
             projection_params=dict(scale='auto', n_compo=rank, reg=reg)
         )
-        # model = make_pipeline(
-        #     filter_bank_transformer, StandardScaler(),
-        #     RandomForestClassifier(n_estimators=40, random_state=RANDOM_STATE)
-        # )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            KNeighborsClassifier(3)
+            LogisticRegression(random_state=RANDOM_STATE, max_iter=1e3)
         )
 
     # Riemann + domain adaptation
     elif benchmark == 'filterbank-riemann-da':
         features = h5io.read_hdf5(DERIV_ROOT / 'features_fb_covs.h5')
-        subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'], all_subjects)
         _, y = get_subjects_labels(subjects_A + subjects_B)
         covs_A = [features[sub]['covs']
                   for sub in subjects_A]
@@ -140,6 +138,8 @@ def load_data(benchmark):
             covs_B_pca = all_covs[covs_A.shape[0]:]
             (covs_A_aligned[:, i],
              covs_B_aligned[:, i]) = align_recenter_rescale(covs_A_pca, covs_B_pca)
+            # (covs_A_aligned[:, i],
+            #  covs_B_aligned[:, i]) = align_recenter(covs_A_pca, covs_B_pca)
         X_A = pd.DataFrame(
             {band: list(covs_A_aligned[:, ii]) for ii, band in
                 enumerate(frequency_bands)})
@@ -152,13 +152,9 @@ def load_data(benchmark):
             method='riemann',
             projection_params=dict(scale='auto', n_compo=rank, reg=reg)
         )
-        # model = make_pipeline(
-        #     filter_bank_transformer, StandardScaler(),
-        #     RandomForestClassifier(n_estimators=40, random_state=RANDOM_STATE)
-        # )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            KNeighborsClassifier(3)
+            LogisticRegression(random_state=RANDOM_STATE, max_iter=1e3)
         )
 
     # Simple features from PSD
@@ -168,14 +164,14 @@ def load_data(benchmark):
             [features[sub][None, :] for sub in train_subjects],
             axis=0
         )
-        model = make_pipeline(
-            StandardScaler(),
-            RandomForestClassifier(n_estimators=40, random_state=RANDOM_STATE)
-        )
         # model = make_pipeline(
         #     StandardScaler(),
         #     KNeighborsClassifier(3)
         # )
+        model = make_pipeline(
+            StandardScaler(),
+            RandomForestClassifier(n_estimators=20, random_state=RANDOM_STATE)
+        )
 
     return X, y, model
 
@@ -204,8 +200,8 @@ def run_benchmark_cv(benchmark):
     #     conf_mats.append(conf_mat[None, :])
     # conf_mat_mean = np.concatenate(conf_mats, axis=0).sum(axis=0)
 
-    scoring = make_scorer(balanced_accuracy_score)
-    # scoring = make_scorer(accuracy_score)
+    # scoring = make_scorer(balanced_accuracy_score)
+    scoring = make_scorer(accuracy_score)
 
     print("Running cross validation ...")
     scores = cross_validate(
