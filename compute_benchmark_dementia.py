@@ -27,7 +27,8 @@ ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto'
 )
 
-BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
+# BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann', 'filterbank-riemann-da']
+BENCHMARKS = ['dummy', 'features-psd', 'filterbank-riemann']
 # BENCHMARKS = ['filterbank-riemann-da']
 N_JOBS = 2
 RANDOM_STATE = 42
@@ -164,14 +165,14 @@ def load_data(benchmark):
             [features[sub][None, :] for sub in train_subjects],
             axis=0
         )
-        # model = make_pipeline(
-        #     StandardScaler(),
-        #     KNeighborsClassifier(3)
-        # )
         model = make_pipeline(
             StandardScaler(),
-            RandomForestClassifier(n_estimators=20, random_state=RANDOM_STATE)
+            KNeighborsClassifier(4)
         )
+        # model = make_pipeline(
+        #     StandardScaler(),
+        #     RandomForestClassifier(n_estimators=20, random_state=RANDOM_STATE)
+        # )
 
     return X, y, model
 
@@ -200,8 +201,8 @@ def run_benchmark_cv(benchmark):
     #     conf_mats.append(conf_mat[None, :])
     # conf_mat_mean = np.concatenate(conf_mats, axis=0).sum(axis=0)
 
-    # scoring = make_scorer(balanced_accuracy_score)
-    scoring = make_scorer(accuracy_score)
+    scoring = make_scorer(balanced_accuracy_score)
+    # scoring = make_scorer(accuracy_score)
 
     print("Running cross validation ...")
     scores = cross_validate(
