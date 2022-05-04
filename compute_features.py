@@ -62,7 +62,7 @@ def extract_simple_features(epochs):
     X_1f_low = np.array(
         [get_slope(x_low, yy.T)[:, 0]
          for yy in y_low]
-    ).mean()
+    ).mean(0)
 
     # Slope high frequencies
     gamma_low = (freqs >= 35) & (freqs <= 49.8)
@@ -72,7 +72,7 @@ def extract_simple_features(epochs):
     X_1f_gamma = np.array(
         [get_slope(x_gamma_low, yy.T)[:, 0]
          for yy in y_gamma_low]
-    ).mean()
+    ).mean(0)
 
     # Alpha peak
     psd_fit = psd.mean(axis=(0, 1))
