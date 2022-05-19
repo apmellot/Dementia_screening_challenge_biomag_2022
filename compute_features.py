@@ -46,10 +46,12 @@ def get_slope(x, y):
 
 
 def extract_simple_features(epochs):
-    psd, freqs = mne.time_frequency.psd_welch(epochs, fmax=49)
+    psd, freqs = mne.time_frequency.psd_welch(epochs, fmin=0.1, fmax=49,
+                                              n_fft=1024, n_overlap=128)
     window = (freqs >= 0.1) & (freqs <= 120)
     freqs = freqs[window]
     psd = psd[..., window]
+    psd = np.log10(psd)
     log_freq = np.log10(freqs[:, None])
 
     # Slope low frequencies
@@ -73,7 +75,7 @@ def extract_simple_features(epochs):
     ).mean(0)
 
     # Alpha peak
-    psd_fit = np.log10(psd).mean(axis=(0, 1))
+    psd_fit = psd.mean(axis=(0, 1))
     poly_freqs = PolynomialFeatures(degree=15).fit_transform(log_freq)
     lm = LinearRegression()
     lm.fit(poly_freqs, psd_fit)
@@ -101,8 +103,8 @@ def extract_simple_features(epochs):
     # # Spectral entropy
     # entropy = np.sum(- psd.mean(axis=(0, 1)) * psd_fit)
 
-    out = np.concatenate([X_1f_low, X_1f_gamma, peak, freq_median], axis=None)
-    # out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
+    # out = np.concatenate([X_1f_low, X_1f_gamma, peak, freq_median], axis=None)
+    out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
     print(out.shape)
     return out
 
