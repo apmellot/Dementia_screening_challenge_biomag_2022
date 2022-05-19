@@ -89,7 +89,7 @@ def load_data(benchmark):
     all_subjects = get_subjects_age(50, ['control', 'dementia', 'mci'])
     subjects_A, subjects_B = get_site(['control', 'dementia', 'mci'], all_subjects)
     train_subjects, y = get_subjects_labels(subjects_A + subjects_B)
-    rank = 50
+    rank = 120
     reg = 1e-35
 
     # Dummy model
@@ -112,7 +112,7 @@ def load_data(benchmark):
         )
         model = make_pipeline(
             filter_bank_transformer, StandardScaler(),
-            LogisticRegression(random_state=RANDOM_STATE, max_iter=1e3)
+            LogisticRegression(random_state=RANDOM_STATE, C=1, max_iter=1e3)
         )
 
     # Riemann + domain adaptation
