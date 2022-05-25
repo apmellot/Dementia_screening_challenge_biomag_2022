@@ -102,6 +102,7 @@ def run_model():
     y_pred = model.predict(X_test)
     y_proba = model.predict_proba(X_test)
 
+    test_subjects = ['hokuto_' + sub[4:] for sub in test_subjects]
     return test_subjects, y_pred, y_proba
 
 
@@ -111,9 +112,9 @@ if __name__ == "__main__":
     print(y_proba)
     results = pd.DataFrame(
         {
-            'subjects': test_subjects,
-            'predicted_labels': y_pred,
-            'proba': (y_proba.max(axis=1)*100).astype(int)
+            'Test data ID': test_subjects,
+            'Estimated diagnoses': y_pred,
+            'Plausibility': (y_proba.max(axis=1)*100).astype(int)
         }
     )
     results.to_csv('./results/results_proba_covs_psd.csv')
