@@ -100,17 +100,20 @@ def run_model():
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)
 
-    return test_subjects, y_pred
+    return test_subjects, y_pred, y_proba
 
 
 
 if __name__ == "__main__":
-    test_subjects, y_pred = run_model()
+    test_subjects, y_pred, y_proba = run_model()
+    print(y_proba)
     results = pd.DataFrame(
         {
             'subjects': test_subjects,
-            'predicted_labels': y_pred
+            'predicted_labels': y_pred,
+            'proba': (y_proba.max(axis=1)*100).astype(int)
         }
     )
-    results.to_csv('./results/results_covs_psd.csv')
+    results.to_csv('./results/results_proba_covs_psd.csv')
