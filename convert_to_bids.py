@@ -1,11 +1,12 @@
 import os
+from pathlib import Path
 import mne
 import mne_bids
 
-base_path = '/storage/store/data/biomag_challenge/Biomag2022'
+base_path = Path("/storage/store/data/biomag_challenge/Biomag2022")
 
-input_dir = '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_fif'
-bids_root = '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
+input_dir = base_path / 'biomag_hokuto_fif'
+bids_root = base_path / 'biomag_hokuto_bids'
 
 
 def convert_to_bids(raw_path, bids_root, subject):
