@@ -16,9 +16,11 @@ FEATURES_ROOT = DERIV_ROOT
 BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
-# FEATURE_TYPE = ['fb_covs']
-FEATURE_TYPE = ['cospectral_covs', 'cross_frequency_covs']
+FEATURE_TYPE = ['psd_features', 'fb_covs']
 N_JOBS = 10
+DEBUG = False
+if DEBUG:
+    N_JOBS = 1
 
 frequency_bands = {
     "low": (0.1, 1),
@@ -83,28 +85,14 @@ def extract_simple_features(epochs):
     filt = ((freqs >= 6) & (freqs < 15))
     idx = resid[filt].argmax(0)
     peak = freqs[filt][idx]
-    # psd_fit = np.log10(psd).mean(axis=(0))
-    # print(psd_fit.shape)
-    # poly_freqs = PolynomialFeatures(degree=15).fit_transform(log_freq)
-    # peaks = np.zeros(psd_fit.shape[1])
-    # for i in range(psd_fit.shape[1]):
-    #     lm = LinearRegression()
-    #     lm.fit(poly_freqs, psd_fit[:, i])
-    #     resid = psd_fit[:, i] - lm.predict(poly_freqs)
-    #     filt = ((freqs >= 6) & (freqs < 15))
-    #     idx = resid[filt].argmax(0)
-    #     peaks[i] = freqs[filt][idx]
 
     # Median power
     psd_sum = psd_fit.cumsum()
     idx = np.abs(psd_sum[-1] / 2 - psd_sum).argmin()
     freq_median = freqs[idx]
 
-    # # Spectral entropy
-    # entropy = np.sum(- psd.mean(axis=(0, 1)) * psd_fit)
-
-    # out = np.concatenate([X_1f_low, X_1f_gamma, peak, freq_median], axis=None)
-    out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
+    out = np.concatenate([X_1f_low, X_1f_gamma, peak, freq_median], axis=None)
+    # out = np.concatenate([X_1f_low, X_1f_gamma, peak], axis=None)
     print(out.shape)
     return out
 
@@ -124,14 +112,8 @@ def run_subject(subject, feature_type):
     epochs = mne.read_epochs(bids_path)
     if feature_type == 'fb_covs':
         out = extract_fb_covs(epochs, frequency_bands, 'covs')
-    elif feature_type == 'features_psd':
+    elif feature_type == 'psd_features':
         out = extract_simple_features(epochs)
-    elif feature_type == 'cospectral_covs':
-        out = extract_fb_covs(epochs, frequency_bands,
-                              'cospectral_covs')
-    elif feature_type == 'cross_frequency_covs':
-        out = extract_fb_covs(epochs, frequency_bands,
-                              'cross_frequency_covs')
 
     return out
 
