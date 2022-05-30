@@ -17,7 +17,7 @@ BIDS_ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
 )
 # FEATURE_TYPE = ['fb_covs']
-FEATURE_TYPE = ['features_psd']
+FEATURE_TYPE = ['cospectral_covs', 'cross_frequency_covs']
 N_JOBS = 10
 
 frequency_bands = {
@@ -31,9 +31,9 @@ frequency_bands = {
 }
 
 
-def extract_fb_covs(epochs, frequency_bands):
+def extract_fb_covs(epochs, frequency_bands, feature):
     features, meta_info = coffeine.compute_features(
-        epochs, features=('covs',), n_fft=1024, n_overlap=512,
+        epochs, features=(feature,), n_fft=1024, n_overlap=512,
         fs=epochs.info['sfreq'], fmax=49, frequency_bands=frequency_bands)
     features['meta_info'] = meta_info
     return features
@@ -123,9 +123,15 @@ def run_subject(subject, feature_type):
     )
     epochs = mne.read_epochs(bids_path)
     if feature_type == 'fb_covs':
-        out = extract_fb_covs(epochs, frequency_bands)
+        out = extract_fb_covs(epochs, frequency_bands, 'covs')
     elif feature_type == 'features_psd':
         out = extract_simple_features(epochs)
+    elif feature_type == 'cospectral_covs':
+        out = extract_fb_covs(epochs, frequency_bands,
+                              'cospectral_covs')
+    elif feature_type == 'cross_frequency_covs':
+        out = extract_fb_covs(epochs, frequency_bands,
+                              'cross_frequency_covs')
 
     return out
 
