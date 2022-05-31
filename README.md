@@ -22,13 +22,13 @@ python convert_to_bids.py
 
 The preprocessing requires the usage of MNE-BIDS-pipeline, along with a configuration file ```config_biomag.py```.
 We recommend downloading the MNE-BIDS-pipeline repository and placing it in the same folder this repository is downloaded, such that its relative position would be ../mne-bids-pipeline. 
-See [installation instructions](https://mne.tools/mne-bids-pipeline/getting_started/install.html)
+See [installation instructions](https://mne.tools/mne-bids-pipeline/getting_started/install.html).
 
 Run the following command to start the preprocessing:
 ~~~
 python ../mne-bids-pipeline/run.py --config config_biomag.py --n_jobs 20 --steps=preprocessing
 ~~~
-In our case, the data are resampled to 200Hz, bandpassed between 0.1Hz and 49Hz, and changed into epochs of 10 seconds.
+In our case, the data are resampled to 200Hz, bandpassed between 0.1Hz and 49Hz, and changed into epochs of 10 seconds without overlap.
 
 ## Feature engineering
 
@@ -39,10 +39,9 @@ python compute_features.py
 
 ## Training the model
 
-To train the model, run the command:
+To train the model and get the prediction on the test set, run the command:
 ~~~
 python final_model.py
 ~~~
-
-
+It will generate a csv file containing the subjects ID, their estimated diagnoses and the probability of the estimated diagnose computed by our model.
 
