@@ -13,7 +13,6 @@ from sklearn.metrics import balanced_accuracy_score, make_scorer, confusion_matr
 
 import h5io
 import coffeine
-from utils.spatial_filters import ProjCommonSpace
 
 import matplotlib.pyplot as plt
 
@@ -128,7 +127,7 @@ def load_data(benchmark):
         # )
         model = make_pipeline(
             StandardScaler(),
-            LogisticRegression(C=1, max_iter=1e4)
+            KNeighborsClassifier(4)
         )
 
     # PSD features + covariances
@@ -212,8 +211,8 @@ def run_benchmark_cv(benchmark):
     #     conf_mats.append(conf_mat[None, :])
     # conf_mat_mean = np.concatenate(conf_mats, axis=0).sum(axis=0)
 
-    scoring = make_scorer(balanced_accuracy_score)
-    # scoring = make_scorer(accuracy_score)
+    # scoring = make_scorer(balanced_accuracy_score)
+    scoring = make_scorer(accuracy_score)
 
     print("Running cross validation ...")
     scores = cross_validate(
