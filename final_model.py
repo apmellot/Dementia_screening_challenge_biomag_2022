@@ -9,11 +9,9 @@ from sklearn.linear_model import LogisticRegression
 import h5io
 import coffeine
 
+# Path of the features
 DERIV_ROOT = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
-FEATURES_ROOT = DERIV_ROOT
-BIDS_ROOT = pathlib.Path(
-    '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids'
-)
+# Path of hokuto_profile.xlsx
 ROOT = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto'
 )
@@ -62,7 +60,7 @@ def get_subjects_age(age, labels):
 def run_model():
     all_subjects = get_subjects_age(50, ['control', 'dementia', 'mci', 'test_data'])
     train_subjects, test_subjects, y_train = get_subjects_labels(all_subjects)
-    features_psd = h5io.read_hdf5(FEATURES_ROOT / 'features_features_psd.h5')
+    features_psd = h5io.read_hdf5(DERIV_ROOT / 'features_features_psd.h5')
     X_psd_train = np.concatenate(
         [features_psd[sub][None, :] for sub in train_subjects],
         axis=0
