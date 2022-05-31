@@ -1,13 +1,14 @@
 import pathlib
 
+# Path for the BIDS raw data
 bids_root = pathlib.Path(
     '/storage/store/data/biomag_challenge/Biomag2022/biomag_hokuto_bids')
-
+# Path for preprocesed data
 deriv_root = pathlib.Path('/storage/store3/derivatives/biomag_hokuto_bids')
 
 
 task = 'rest'
-sessions = ['rest']  # keep empty for code flow
+sessions = ['rest']
 data_type = 'meg'
 ch_types = ['meg']
 
@@ -35,7 +36,6 @@ log_level = "info"
 
 mne_log_level = "error"
 
-# on_error = 'continue'
-on_error = "debug"
+on_error = "continue"
 
 N_JOBS = 20
