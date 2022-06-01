@@ -45,7 +45,7 @@ python compute_features.py
 
 ## Training the model
 
-To train the model and get the prediction on the test set, run the command:
+To train the model (logistic regression on PSDs and covariances) and get the prediction on the test set, run the command:
 ~~~
 python final_model.py
 ~~~
