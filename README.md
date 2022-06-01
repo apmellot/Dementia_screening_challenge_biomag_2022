@@ -38,7 +38,7 @@ In our case, the data are resampled to 200 Hz, bandpassed between 0.1 Hz and 49 
 
 ## Feature engineering
 
-To compute the features based on the PSD (Power Spectral Density) or the covariance, run the command:
+To compute the features based on the [PSD](https://mne.tools/stable/generated/mne.time_frequency.psd_welch.html) (Power Spectral Density) or the covariance, run the command:
 ~~~
 python compute_features.py
 ~~~
